@@ -1,6 +1,7 @@
 'use client';
 
 import { Sidebar } from '@/components/common/Sidebar';
+import { Navbar } from '@/components/common/Navbar';
 import { useAuthStore } from '@/stores/authStore';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -40,6 +41,7 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <main className="ml-60 min-h-screen">
+        <Navbar />
         <div className="p-6">{children}</div>
       </main>
     </div>
