@@ -1,21 +1,52 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { usersApi } from '@/lib/api/client';
 import { User } from '@/types';
-import { Search, Plus, Shield, Eye, Ban } from 'lucide-react';
+import { useAuthStore } from '@/stores/authStore';
+import {
+  Search,
+  Plus,
+  LayoutGrid,
+  List,
+  Filter,
+  UserCircle,
+  Shield,
+  Eye,
+  Ban,
+  ChevronRight,
+  Users as UsersIcon,
+} from 'lucide-react';
 import Link from 'next/link';
+import { PERMISSION_MATRIX } from '@/lib/permissions';
+
+// ─── Role badge color map ───
+const ROLE_BADGE: Record<string, { bg: string; text: string; dot: string }> = {
+  ADMIN: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
+  OWNER: { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500' },
+  SALES: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+  PURCHASE: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
+  MANUFACTURING: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  INVENTORY: { bg: 'bg-cyan-50', text: 'text-cyan-700', dot: 'bg-cyan-500' },
+};
+
+const ACCESS_ICON_MAP: Record<string, { icon: typeof Shield; color: string }> = {
+  FULL: { icon: Shield, color: 'text-emerald-600' },
+  VIEW: { icon: Eye, color: 'text-amber-600' },
+  NONE: { icon: Ban, color: 'text-slate-300' },
+};
+
+type ViewMode = 'list' | 'grid';
 
 export default function UsersPage() {
+  const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [showPermMatrix, setShowPermMatrix] = useState(false);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const res = await usersApi.getAll({ limit: 100 });
       setUsers(res.data.data || []);
@@ -24,7 +55,11 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   const filteredUsers = users.filter(
     (u) =>
@@ -33,118 +68,496 @@ export default function UsersPage() {
       u.role.toLowerCase().includes(search.toLowerCase())
   );
 
-  const roleBadgeColor: Record<string, string> = {
-    ADMIN: 'bg-red-50 text-red-700 border-red-200',
-    OWNER: 'bg-purple-50 text-purple-700 border-purple-200',
-    SALES: 'bg-blue-50 text-blue-700 border-blue-200',
-    PURCHASE: 'bg-amber-50 text-amber-700 border-amber-200',
-    MANUFACTURING: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    INVENTORY: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  const getAccess = (user: User, mod: string) => {
+    const a = user.module_access?.find((m) => m.module === mod);
+    return a?.access_type || 'NONE';
   };
 
-  const accessIcon = (type: string) => {
-    if (type === 'FULL') return <Shield size={14} className="text-emerald-600" />;
-    if (type === 'VIEW') return <Eye size={14} className="text-amber-600" />;
-    return <Ban size={14} className="text-slate-400" />;
-  };
+  // ─── Loading skeleton ───
+  if (loading) {
+    return (
+      <div>
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
+            User Management
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Manage users and configure module access
+          </p>
+        </div>
+        <div className="bg-white rounded-lg border border-slate-200">
+          <div className="p-4 border-b border-slate-100">
+            <div className="h-9 w-72 bg-slate-100 rounded-md animate-pulse" />
+          </div>
+          <div className="divide-y divide-slate-100">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-4 px-5 py-4 animate-pulse">
+                <div className="w-10 h-10 rounded-full bg-slate-100" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-36 bg-slate-100 rounded" />
+                  <div className="h-3 w-48 bg-slate-50 rounded" />
+                </div>
+                <div className="h-5 w-16 bg-slate-100 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const accessColor = (type: string) => {
-    if (type === 'FULL') return 'bg-emerald-50 text-emerald-700';
-    if (type === 'VIEW') return 'bg-amber-50 text-amber-700';
-    return 'bg-slate-50 text-slate-400';
-  };
+  // ─── Group unique modules from permission matrix ───
+  const permModules = [...new Set(PERMISSION_MATRIX.map((p) => p.module))];
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* ═══ Page Header ═══ */}
+      <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">User Management</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage users and their module access permissions</p>
+          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
+            User Management
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Manage users, roles, and module access permissions
+          </p>
         </div>
-        <Link
-          href="/users/new"
-          className="inline-flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
-        >
-          <Plus size={16} />
-          Add User
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPermMatrix(!showPermMatrix)}
+            className="inline-flex items-center gap-2 border border-slate-200 bg-white text-slate-700 px-3.5 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
+          >
+            <Shield size={15} />
+            Permission Matrix
+          </button>
+          <Link
+            href="/users/new"
+            className="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+          >
+            <Plus size={15} />
+            Add User
+          </Link>
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="bg-white rounded-lg border border-slate-200">
-        <div className="p-4 border-b border-slate-200">
-          <div className="relative max-w-sm">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-md text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+      {/* ═══ Permission Matrix Panel (expandable) ═══ */}
+      {showPermMatrix && (
+        <div className="bg-white rounded-lg border border-slate-200 mb-6 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield size={16} className="text-primary" />
+              <h2 className="text-sm font-semibold text-slate-900">
+                Role-Based Permission Matrix
+              </h2>
+            </div>
+            <span className="text-xs text-slate-400">
+              Global access rules for Admin vs User roles
+            </span>
           </div>
-        </div>
 
-        {/* Table */}
-        {loading ? (
-          <div className="p-8 text-center text-slate-400 text-sm">Loading users...</div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="p-8 text-center text-slate-400 text-sm">No users found</div>
-        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="text-left py-3 px-4 font-medium text-slate-600">Name</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-600">Email</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-600">Role</th>
-                  <th className="text-center py-3 px-4 font-medium text-slate-600">Products</th>
-                  <th className="text-center py-3 px-4 font-medium text-slate-600">Sales</th>
-                  <th className="text-center py-3 px-4 font-medium text-slate-600">Purchase</th>
-                  <th className="text-center py-3 px-4 font-medium text-slate-600">Mfg</th>
-                  <th className="text-center py-3 px-4 font-medium text-slate-600">BoM</th>
-                  <th className="text-center py-3 px-4 font-medium text-slate-600">Inventory</th>
-                  <th className="text-center py-3 px-4 font-medium text-slate-600">Status</th>
+                <tr className="bg-slate-50/70">
+                  <th className="text-left py-3 px-5 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Module
+                  </th>
+                  <th className="text-left py-3 px-5 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Action
+                  </th>
+                  <th className="text-center py-3 px-4 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Admin
+                  </th>
+                  <th className="text-center py-3 px-4 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="text-center py-3 px-4 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    None
+                  </th>
                 </tr>
               </thead>
-              <tbody>
-                {filteredUsers.map((user) => {
-                  const getAccess = (mod: string) => {
-                    const a = user.module_access?.find((m) => m.module === mod);
-                    return a?.access_type || 'NONE';
-                  };
+              <tbody className="divide-y divide-slate-100">
+                {permModules.map((mod) => {
+                  const actions = PERMISSION_MATRIX.filter((p) => p.module === mod);
+                  return actions.map((perm, idx) => (
+                    <tr
+                      key={`${mod}-${perm.action}`}
+                      className="hover:bg-slate-50/50 transition-colors"
+                    >
+                      {idx === 0 ? (
+                        <td
+                          className="py-2.5 px-5 font-medium text-slate-900 text-sm"
+                          rowSpan={actions.length}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                mod === 'Sales'
+                                  ? 'bg-blue-500'
+                                  : mod === 'Purchase'
+                                    ? 'bg-amber-500'
+                                    : mod === 'Manufacturing'
+                                      ? 'bg-emerald-500'
+                                      : 'bg-violet-500'
+                              }`}
+                            />
+                            {mod}
+                          </span>
+                        </td>
+                      ) : null}
+                      <td className="py-2.5 px-5 text-slate-600">{perm.action}</td>
+                      <td className="py-2.5 px-4 text-center">
+                        {perm.admin ? (
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path
+                                d="M3 7L6 10L11 4"
+                                stroke="#059669"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-red-50">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path
+                                d="M4 4L10 10M10 4L4 10"
+                                stroke="#DC2626"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        {perm.user ? (
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path
+                                d="M3 7L6 10L11 4"
+                                stroke="#059669"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-red-50">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path
+                                d="M4 4L10 10M10 4L4 10"
+                                stroke="#DC2626"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        {perm.none ? (
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path
+                                d="M3 7L6 10L11 4"
+                                stroke="#059669"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-red-50">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path
+                                d="M4 4L10 10M10 4L4 10"
+                                stroke="#DC2626"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ));
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
+      {/* ═══ User List Card ═══ */}
+      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+        {/* ── Toolbar ── */}
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search
+              size={15}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              placeholder="Search by name, email or role..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button className="p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600">
+              <Filter size={15} />
+            </button>
+            <div className="w-px h-5 bg-slate-200 mx-1" />
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+              }`}
+              title="List view"
+            >
+              <List size={15} />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'grid'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+              }`}
+              title="Grid view"
+            >
+              <LayoutGrid size={15} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Summary Bar ── */}
+        <div className="px-5 py-2 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between">
+          <span className="text-xs text-slate-500">
+            {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} found
+          </span>
+          <div className="flex items-center gap-3">
+            {['ADMIN', 'SALES', 'PURCHASE', 'MANUFACTURING'].map((r) => {
+              const count = filteredUsers.filter((u) => u.role === r).length;
+              if (count === 0) return null;
+              const badge = ROLE_BADGE[r] || ROLE_BADGE.INVENTORY;
+              return (
+                <span key={r} className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                  {r.charAt(0) + r.slice(1).toLowerCase()} ({count})
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Empty State ── */}
+        {filteredUsers.length === 0 ? (
+          <div className="py-16 flex flex-col items-center justify-center text-center">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+              <UsersIcon size={24} className="text-slate-400" />
+            </div>
+            <p className="text-sm font-medium text-slate-700 mb-1">No users found</p>
+            <p className="text-xs text-slate-400 mb-4 max-w-xs">
+              {search
+                ? `No users match "${search}". Try adjusting your search.`
+                : 'Add your first user to get started.'}
+            </p>
+            <Link
+              href="/users/new"
+              className="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
+            >
+              <Plus size={14} />
+              Add User
+            </Link>
+          </div>
+        ) : viewMode === 'list' ? (
+          /* ── List View ── */
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left py-3 px-5 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="text-left py-3 px-5 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Role
+                  </th>
+                  <th className="text-center py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Products
+                  </th>
+                  <th className="text-center py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Sales
+                  </th>
+                  <th className="text-center py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Purchase
+                  </th>
+                  <th className="text-center py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Mfg
+                  </th>
+                  <th className="text-center py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    BoM
+                  </th>
+                  <th className="text-center py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Inventory
+                  </th>
+                  <th className="text-center py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="w-10" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredUsers.map((user) => {
+                  const badge = ROLE_BADGE[user.role] || ROLE_BADGE.INVENTORY;
                   return (
-                    <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer">
-                      <td className="py-3 px-4">
-                        <Link href={`/users/${user.id}`} className="font-medium text-slate-900 hover:text-blue-700">
-                          {user.name}
+                    <tr
+                      key={user.id}
+                      className="group hover:bg-slate-50/70 transition-colors"
+                    >
+                      <td className="py-3 px-5">
+                        <Link
+                          href={`/users/${user.id}`}
+                          className="flex items-center gap-3 group/name"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                            <UserCircle
+                              size={20}
+                              className="text-slate-400"
+                              strokeWidth={1.5}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-900 truncate group-hover/name:text-primary transition-colors">
+                              {user.name}
+                            </p>
+                            <p className="text-xs text-slate-400 truncate">{user.email}</p>
+                          </div>
                         </Link>
                       </td>
-                      <td className="py-3 px-4 text-slate-500">{user.email}</td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium border ${roleBadgeColor[user.role] || 'bg-slate-50 text-slate-600'}`}>
+                      <td className="py-3 px-5">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
                           {user.role}
                         </span>
                       </td>
-                      {['PRODUCTS', 'SALES', 'PURCHASE', 'MANUFACTURING', 'BOM', 'INVENTORY'].map((mod) => (
-                        <td key={mod} className="py-3 px-4 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${accessColor(getAccess(mod))}`}>
-                            {accessIcon(getAccess(mod))}
-                            {getAccess(mod)}
-                          </span>
-                        </td>
-                      ))}
-                      <td className="py-3 px-4 text-center">
-                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${user.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                      {['PRODUCTS', 'SALES', 'PURCHASE', 'MANUFACTURING', 'BOM', 'INVENTORY'].map(
+                        (mod) => {
+                          const access = getAccess(user, mod);
+                          const iconConfig = ACCESS_ICON_MAP[access] || ACCESS_ICON_MAP.NONE;
+                          const Icon = iconConfig.icon;
+                          return (
+                            <td key={mod} className="py-3 px-3 text-center">
+                              <span
+                                className="inline-flex items-center justify-center"
+                                title={`${mod}: ${access}`}
+                              >
+                                <Icon size={15} className={iconConfig.color} />
+                              </span>
+                            </td>
+                          );
+                        }
+                      )}
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                            user.is_active
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-red-50 text-red-700'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              user.is_active ? 'bg-emerald-500' : 'bg-red-500'
+                            }`}
+                          />
                           {user.is_active ? 'Active' : 'Inactive'}
                         </span>
+                      </td>
+                      <td className="py-3 pr-3">
+                        <Link
+                          href={`/users/${user.id}`}
+                          className="p-1.5 rounded-md text-slate-300 group-hover:text-slate-500 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <ChevronRight size={16} />
+                        </Link>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        ) : (
+          /* ── Grid View ── */
+          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredUsers.map((user) => {
+              const badge = ROLE_BADGE[user.role] || ROLE_BADGE.INVENTORY;
+              return (
+                <Link
+                  key={user.id}
+                  href={`/users/${user.id}`}
+                  className="group block border border-slate-200 rounded-lg p-4 hover:border-primary/30 hover:shadow-sm transition-all"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center">
+                      <UserCircle
+                        size={24}
+                        className="text-slate-400"
+                        strokeWidth={1.5}
+                      />
+                    </div>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        user.is_active
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-red-50 text-red-700'
+                      }`}
+                    >
+                      {user.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary transition-colors">
+                    {user.name}
+                  </p>
+                  <p className="text-xs text-slate-400 truncate mt-0.5 mb-3">
+                    {user.email}
+                  </p>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                    {user.role}
+                  </span>
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+                    {['PRODUCTS', 'SALES', 'PURCHASE', 'MANUFACTURING'].map((mod) => {
+                      const access = getAccess(user, mod);
+                      const iconConfig = ACCESS_ICON_MAP[access] || ACCESS_ICON_MAP.NONE;
+                      const Icon = iconConfig.icon;
+                      return (
+                        <span
+                          key={mod}
+                          className="flex items-center gap-1 text-xs text-slate-400"
+                          title={`${mod}: ${access}`}
+                        >
+                          <Icon size={12} className={iconConfig.color} />
+                        </span>
+                      );
+                    })}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
