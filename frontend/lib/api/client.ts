@@ -140,7 +140,7 @@ export const stockLedgerApi = {
 
 // Audit Logs API
 export const auditLogsApi = {
-  getAll: (params?: { page?: number; limit?: number; module?: string; user_id?: string }) =>
+  getAll: (params?: { page?: number; limit?: number; module?: string; user_id?: string; action?: string; start_date?: string; end_date?: string }) =>
     apiClient.get('/audit-logs', { params }),
 };
 
