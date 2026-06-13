@@ -3,6 +3,7 @@
 import { Sidebar } from '@/components/common/Sidebar';
 import { Navbar } from '@/components/common/Navbar';
 import { useAuthStore } from '@/stores/authStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -12,6 +13,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { collapsed } = useSidebarStore();
   const router = useRouter();
 
   useEffect(() => {
@@ -40,7 +42,11 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-slate-50">
       <Sidebar />
-      <main className="ml-60 min-h-screen">
+      <main
+        className={`min-h-screen transition-all duration-200 ${
+          collapsed ? 'ml-16' : 'ml-60'
+        }`}
+      >
         <Navbar />
         <div className="p-6">{children}</div>
       </main>
