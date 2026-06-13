@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuthStore } from '@/stores/authStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -17,7 +18,6 @@ import {
   LogOut,
   ChevronLeft,
 } from 'lucide-react';
-import { useState } from 'react';
 
 const navigationItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, module: null },
@@ -35,7 +35,7 @@ const navigationItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout, hasModuleAccess } = useAuthStore();
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, toggle } = useSidebarStore();
 
   const filteredNavItems = navigationItems.filter((item) => {
     if (!item.module) return true;
@@ -56,7 +56,7 @@ export function Sidebar() {
           </span>
         )}
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => toggle()}
           className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500"
           aria-label="Toggle sidebar"
         >
