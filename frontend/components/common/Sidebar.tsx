@@ -19,17 +19,22 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 
-const navigationItems = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, module: null },
-  { name: 'Products', href: '/products', icon: Package, module: 'PRODUCTS' },
-  { name: 'Sales Orders', href: '/sales-orders', icon: ShoppingCart, module: 'SALES' },
-  { name: 'Purchase Orders', href: '/purchase-orders', icon: Truck, module: 'PURCHASE' },
-  { name: 'Bill of Materials', href: '/boms', icon: FileText, module: 'BOM' },
-  { name: 'Manufacturing', href: '/manufacturing-orders', icon: Factory, module: 'MANUFACTURING' },
+// Items visible to ALL users (core ERP modules)
+const coreNavItems = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Products', href: '/products', icon: Package },
+  { name: 'Sales Orders', href: '/sales-orders', icon: ShoppingCart },
+  { name: 'Purchase Orders', href: '/purchase-orders', icon: Truck },
+  { name: 'Bill of Materials', href: '/boms', icon: FileText },
+  { name: 'Manufacturing', href: '/manufacturing-orders', icon: Factory },
+  { name: 'Audit Logs', href: '/audit-logs', icon: ClipboardList },
+];
+
+// Items visible only to users with explicit module access (admin-managed)
+const adminNavItems = [
   { name: 'Work Centers', href: '/work-centers', icon: Settings, module: 'MANUFACTURING' },
   { name: 'Stock Ledger', href: '/stock-ledger', icon: Warehouse, module: 'INVENTORY' },
   { name: 'Users', href: '/users', icon: Users, module: 'USERS' },
-  { name: 'Audit Logs', href: '/audit-logs', icon: ClipboardList, module: 'AUDIT' },
 ];
 
 export function Sidebar() {
@@ -37,10 +42,9 @@ export function Sidebar() {
   const { user, logout, hasModuleAccess } = useAuthStore();
   const { collapsed, toggle } = useSidebarStore();
 
-  const filteredNavItems = navigationItems.filter((item) => {
-    if (!item.module) return true;
-    return hasModuleAccess(item.module);
-  });
+  // Admin section: only show for ADMIN/OWNER roles
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'OWNER';
+  const filteredAdminItems = isAdmin ? adminNavItems : [];
 
   return (
     <aside
@@ -70,10 +74,9 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         <ul className="space-y-0.5">
-          {filteredNavItems.map((item) => {
+          {coreNavItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             const Icon = item.icon;
-
             return (
               <li key={item.href}>
                 <Link
@@ -92,6 +95,42 @@ export function Sidebar() {
             );
           })}
         </ul>
+
+        {/* ── Administration section (admin/owner only) ── */}
+        {filteredAdminItems.length > 0 && (
+          <>
+            <div className="my-3 px-3">
+              <div className="border-t border-slate-200" />
+              {!collapsed && (
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mt-3 mb-1">
+                  Administration
+                </p>
+              )}
+            </div>
+            <ul className="space-y-0.5">
+              {filteredAdminItems.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                      title={collapsed ? item.name : undefined}
+                    >
+                      <Icon size={18} className="shrink-0" />
+                      {!collapsed && <span>{item.name}</span>}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
       </nav>
 
       {/* User section */}
