@@ -175,7 +175,8 @@ stockLedgerRouter.get('/', checkModuleAccess(ERPModule.INVENTORY, AccessType.VIE
 export const auditLogRouter = Router();
 auditLogRouter.use(authenticate);
 
-auditLogRouter.get('/', checkModuleAccess(ERPModule.AUDIT, AccessType.VIEW), async (req: AuthRequest, res: Response) => {
+// All authenticated users can view audit logs (core feature)
+auditLogRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
@@ -192,9 +193,9 @@ auditLogRouter.get('/', checkModuleAccess(ERPModule.AUDIT, AccessType.VIEW), asy
 export const dashboardRouter = Router();
 dashboardRouter.use(authenticate);
 
-dashboardRouter.get('/stats', async (_req: AuthRequest, res: Response) => {
+dashboardRouter.get('/stats', async (req: AuthRequest, res: Response) => {
   try {
-    const stats = await DashboardService.getStats();
+    const stats = await DashboardService.getStats(req.user?.id);
     res.json({ success: true, data: stats });
   } catch (error: unknown) {
     const err = error as { status?: number; message?: string };
