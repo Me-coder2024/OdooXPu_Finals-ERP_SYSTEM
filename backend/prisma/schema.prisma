@@ -75,7 +75,8 @@ model User {
   mobile        String?
   address       String?
   dob           DateTime? @db.Date
-  profile_photo String?
+  profile_photo Bytes?
+  photo_mime_type String?
   is_active     Boolean  @default(true)
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
@@ -204,12 +205,14 @@ model PurchaseOrder {
   notes          String?
   auto_generated Boolean     @default(false)
   source_so_id   String?
+  source_mo_id   String?
   created_by     String
   created_at     DateTime    @default(now())
   updated_at     DateTime    @updatedAt
 
   vendor    Vendor              @relation(fields: [vendor_id], references: [id])
   source_so SalesOrder?         @relation(fields: [source_so_id], references: [id])
+  source_mo ManufacturingOrder? @relation(fields: [source_mo_id], references: [id])
   creator   User                @relation(fields: [created_by], references: [id])
   lines     PurchaseOrderLine[]
 
@@ -308,6 +311,7 @@ model ManufacturingOrder {
   source_so  SalesOrder?        @relation(fields: [source_so_id], references: [id])
   components ManufacturingOrderComponent[]
   work_orders WorkOrder[]
+  triggered_pos PurchaseOrder[]
 
   @@index([status])
 }
