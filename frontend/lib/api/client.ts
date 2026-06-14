@@ -148,3 +148,19 @@ export const auditLogsApi = {
 export const dashboardApi = {
   getStats: () => apiClient.get('/dashboard/stats'),
 };
+
+// Profile API (self-update)
+export const profileApi = {
+  update: (data: { name?: string; address?: string; mobile?: string }) =>
+    apiClient.patch('/users/me/profile', data),
+  uploadPhoto: (userId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    return apiClient.post(`/users/${userId}/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  deletePhoto: (userId: string) => apiClient.delete(`/users/${userId}/photo`),
+  getPhotoUrl: (userId: string) =>
+    `${API_BASE_URL}/users/${userId}/photo?t=${Date.now()}`,
+};
