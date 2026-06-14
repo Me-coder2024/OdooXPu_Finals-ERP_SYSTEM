@@ -16,6 +16,8 @@ import {
   Ban,
   ChevronRight,
   Users as UsersIcon,
+  X,
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { PERMISSION_MATRIX } from '@/lib/permissions';
@@ -38,6 +40,180 @@ const ACCESS_ICON_MAP: Record<string, { icon: typeof Shield; color: string }> = 
 
 type ViewMode = 'list' | 'grid';
 
+// ─── Add User Modal ───
+function AddUserModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'SALES' as string,
+    mobile: '',
+    address: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      await usersApi.create(form);
+      onCreated();
+      onClose();
+      setForm({ name: '', email: '', password: '', role: 'SALES', mobile: '', address: '' });
+    } catch (err: unknown) {
+      const axErr = err as { response?: { data?: { errors?: { message: string }[] } } };
+      setError(axErr.response?.data?.errors?.[0]?.message || 'Failed to create user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Add New User</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Create a new user with role-based access</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name *</label>
+            <input
+              type="text"
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="e.g. Rahul Sharma"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Email *</label>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="e.g. rahul@shivfurniture.com"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Password *</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder="Minimum 6 characters"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Role */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Role *</label>
+            <select
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            >
+              <option value="ADMIN">Admin</option>
+              <option value="OWNER">Owner</option>
+              <option value="SALES">Sales</option>
+              <option value="PURCHASE">Purchase</option>
+              <option value="MANUFACTURING">Manufacturing</option>
+              <option value="INVENTORY">Inventory</option>
+            </select>
+          </div>
+
+          {/* Mobile */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Mobile</label>
+            <input
+              type="tel"
+              value={form.mobile}
+              onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+              placeholder="e.g. +91 98765 43210"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Address */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
+            <input
+              type="text"
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="e.g. Mumbai, Maharashtra"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {/* Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover disabled:opacity-50 transition-colors"
+            >
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              {saving ? 'Creating...' : 'Create User'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function UsersPage() {
   const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState<User[]>([]);
@@ -45,6 +221,8 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showPermMatrix, setShowPermMatrix] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -61,6 +239,7 @@ export default function UsersPage() {
     fetchUsers();
   }, [fetchUsers]);
 
+  // ─── Client-side filter (instant, no debounce needed) ───
   const filteredUsers = users.filter(
     (u) =>
       u.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -71,6 +250,22 @@ export default function UsersPage() {
   const getAccess = (user: User, mod: string) => {
     const a = user.module_access?.find((m) => m.module === mod);
     return a?.access_type || 'NONE';
+  };
+
+  // ─── Toggle active/inactive ───
+  const handleToggleActive = async (user: User) => {
+    setTogglingId(user.id);
+    try {
+      await usersApi.update(user.id, { is_active: !user.is_active });
+      // Update local state immediately
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, is_active: !u.is_active } : u))
+      );
+    } catch (err) {
+      console.error('Failed to toggle user status:', err);
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   // ─── Loading skeleton ───
@@ -129,13 +324,13 @@ export default function UsersPage() {
             <Shield size={15} />
             Permission Matrix
           </button>
-          <Link
-            href="/users/new"
+          <button
+            onClick={() => setShowAddModal(true)}
             className="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
           >
             <Plus size={15} />
             Add User
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -190,15 +385,14 @@ export default function UsersPage() {
                         >
                           <span className="flex items-center gap-2">
                             <span
-                              className={`w-2 h-2 rounded-full ${
-                                mod === 'Sales'
-                                  ? 'bg-blue-500'
-                                  : mod === 'Purchase'
-                                    ? 'bg-amber-500'
-                                    : mod === 'Manufacturing'
-                                      ? 'bg-emerald-500'
-                                      : 'bg-violet-500'
-                              }`}
+                              className={`w-2 h-2 rounded-full ${mod === 'Sales'
+                                ? 'bg-blue-500'
+                                : mod === 'Purchase'
+                                  ? 'bg-amber-500'
+                                  : mod === 'Manufacturing'
+                                    ? 'bg-emerald-500'
+                                    : 'bg-violet-500'
+                                }`}
                             />
                             {mod}
                           </span>
@@ -308,6 +502,14 @@ export default function UsersPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <button className="p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600">
@@ -316,22 +518,20 @@ export default function UsersPage() {
             <div className="w-px h-5 bg-slate-200 mx-1" />
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-              }`}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'list'
+                ? 'bg-primary/10 text-primary'
+                : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                }`}
               title="List view"
             >
               <List size={15} />
             </button>
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === 'grid'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-              }`}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'grid'
+                ? 'bg-primary/10 text-primary'
+                : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                }`}
               title="Grid view"
             >
               <LayoutGrid size={15} />
@@ -345,7 +545,7 @@ export default function UsersPage() {
             {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} found
           </span>
           <div className="flex items-center gap-3">
-            {['ADMIN', 'SALES', 'PURCHASE', 'MANUFACTURING'].map((r) => {
+            {['ADMIN', 'OWNER', 'SALES', 'PURCHASE', 'MANUFACTURING'].map((r) => {
               const count = filteredUsers.filter((u) => u.role === r).length;
               if (count === 0) return null;
               const badge = ROLE_BADGE[r] || ROLE_BADGE.INVENTORY;
@@ -371,13 +571,13 @@ export default function UsersPage() {
                 ? `No users match "${search}". Try adjusting your search.`
                 : 'Add your first user to get started.'}
             </p>
-            <Link
-              href="/users/new"
+            <button
+              onClick={() => setShowAddModal(true)}
               className="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors"
             >
               <Plus size={14} />
               Add User
-            </Link>
+            </button>
           </div>
         ) : viewMode === 'list' ? (
           /* ── List View ── */
@@ -418,6 +618,7 @@ export default function UsersPage() {
               <tbody className="divide-y divide-slate-50">
                 {filteredUsers.map((user) => {
                   const badge = ROLE_BADGE[user.role] || ROLE_BADGE.INVENTORY;
+                  const isToggling = togglingId === user.id;
                   return (
                     <tr
                       key={user.id}
@@ -468,21 +669,48 @@ export default function UsersPage() {
                           );
                         }
                       )}
+                      {/* ── Status Toggle Button ── */}
                       <td className="py-3 px-3 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                            user.is_active
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-red-50 text-red-700'
-                          }`}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleActive(user);
+                          }}
+                          disabled={isToggling}
+                          className="inline-flex items-center gap-1.5 group/toggle"
+                          title={`Click to ${user.is_active ? 'deactivate' : 'activate'} this user`}
                         >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              user.is_active ? 'bg-emerald-500' : 'bg-red-500'
+                          {/* Toggle switch */}
+                          <div
+                            className={`relative w-8 h-[18px] rounded-full transition-colors duration-200 ${
+                              isToggling
+                                ? 'bg-slate-300'
+                                : user.is_active
+                                  ? 'bg-emerald-500 group-hover/toggle:bg-emerald-600'
+                                  : 'bg-slate-300 group-hover/toggle:bg-slate-400'
                             }`}
-                          />
-                          {user.is_active ? 'Active' : 'Inactive'}
-                        </span>
+                          >
+                            <div
+                              className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-all duration-200 ${
+                                user.is_active ? 'left-[14px]' : 'left-[2px]'
+                              }`}
+                            />
+                          </div>
+                          {/* Label */}
+                          <span
+                            className={`text-xs font-medium transition-colors ${
+                              user.is_active ? 'text-emerald-700' : 'text-slate-500'
+                            }`}
+                          >
+                            {isToggling ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : user.is_active ? (
+                              'Active'
+                            ) : (
+                              'Inactive'
+                            )}
+                          </span>
+                        </button>
                       </td>
                       <td className="py-3 pr-3">
                         <Link
@@ -503,36 +731,67 @@ export default function UsersPage() {
           <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredUsers.map((user) => {
               const badge = ROLE_BADGE[user.role] || ROLE_BADGE.INVENTORY;
+              const isToggling = togglingId === user.id;
               return (
-                <Link
+                <div
                   key={user.id}
-                  href={`/users/${user.id}`}
                   className="group block border border-slate-200 rounded-lg p-4 hover:border-primary/30 hover:shadow-sm transition-all"
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center">
-                      <UserCircle
-                        size={24}
-                        className="text-slate-400"
-                        strokeWidth={1.5}
-                      />
-                    </div>
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        user.is_active
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-red-50 text-red-700'
-                      }`}
+                    <Link href={`/users/${user.id}`}>
+                      <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center">
+                        <UserCircle
+                          size={24}
+                          className="text-slate-400"
+                          strokeWidth={1.5}
+                        />
+                      </div>
+                    </Link>
+                    {/* Toggle in grid view */}
+                    <button
+                      onClick={() => handleToggleActive(user)}
+                      disabled={isToggling}
+                      className="inline-flex items-center gap-1.5"
+                      title={`Click to ${user.is_active ? 'deactivate' : 'activate'} this user`}
                     >
-                      {user.is_active ? 'Active' : 'Inactive'}
-                    </span>
+                      <div
+                        className={`relative w-8 h-[18px] rounded-full transition-colors duration-200 ${
+                          isToggling
+                            ? 'bg-slate-300'
+                            : user.is_active
+                              ? 'bg-emerald-500 hover:bg-emerald-600'
+                              : 'bg-slate-300 hover:bg-slate-400'
+                        }`}
+                      >
+                        <div
+                          className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-all duration-200 ${
+                            user.is_active ? 'left-[14px]' : 'left-[2px]'
+                          }`}
+                        />
+                      </div>
+                      <span
+                        className={`text-xs font-medium ${
+                          user.is_active ? 'text-emerald-700' : 'text-slate-500'
+                        }`}
+                      >
+                        {isToggling ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : user.is_active ? (
+                          'Active'
+                        ) : (
+                          'Inactive'
+                        )}
+                      </span>
+                    </button>
                   </div>
-                  <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary transition-colors">
-                    {user.name}
-                  </p>
-                  <p className="text-xs text-slate-400 truncate mt-0.5 mb-3">
-                    {user.email}
-                  </p>
+                  <Link href={`/users/${user.id}`}>
+                    <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary transition-colors">
+                      {user.name}
+                    </p>
+                    <p className="text-xs text-slate-400 truncate mt-0.5 mb-3">
+                      {user.email}
+                    </p>
+                  </Link>
                   <span
                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}
                   >
@@ -555,12 +814,22 @@ export default function UsersPage() {
                       );
                     })}
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>
         )}
       </div>
+
+      {/* ═══ Add User Modal ═══ */}
+      <AddUserModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onCreated={() => {
+          setLoading(true);
+          fetchUsers();
+        }}
+      />
     </div>
   );
 }
