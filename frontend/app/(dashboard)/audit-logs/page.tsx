@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { auditLogsApi, usersApi } from '@/lib/api/client';
 import { AuditLogEntry, ERPModule, User } from '@/types';
 import { formatDateTime, formatCurrency } from '@/lib/utils';
@@ -109,9 +110,13 @@ function getRecordType(entity: string): string {
 }
 
 export default function AuditLogsPage() {
+  const searchParams = useSearchParams();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
+
+  // Read ?module= from URL to auto-apply filter (e.g. /audit-logs?module=SALES)
+  const urlModule = searchParams.get('module');
 
   // Filters
   const [moduleFilter, setModuleFilter] = useState('ALL');
@@ -119,6 +124,13 @@ export default function AuditLogsPage() {
   const [userFilter, setUserFilter] = useState('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Auto-set module filter from URL param on mount
+  useEffect(() => {
+    if (urlModule && MODULE_OPTIONS.includes(urlModule as ERPModule)) {
+      setModuleFilter(urlModule);
+    }
+  }, [urlModule]);
 
   // Pagination
   const [page, setPage] = useState(1);
