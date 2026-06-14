@@ -86,8 +86,20 @@ router.post('/logout', authenticate, (_req: AuthRequest, res: Response) => {
   res.json({ success: true, data: { message: 'Logged out successfully' } });
 });
 
-router.get('/me', authenticate, (req: AuthRequest, res: Response) => {
-  res.json({ success: true, data: req.user });
+router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: {
+        id: true, name: true, email: true, role: true, mobile: true,
+        address: true, is_active: true,
+        module_access: { select: { module: true, access_type: true } },
+      },
+    });
+    res.json({ success: true, data: user });
+  } catch {
+    res.json({ success: true, data: req.user });
+  }
 });
 
 router.post(
