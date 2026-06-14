@@ -3,6 +3,16 @@ import { AuthRequest } from './auth';
 import prisma from '../config/database';
 import { ERPModule, AccessType } from '@prisma/client';
 
+// Core modules accessible to ALL authenticated users for VIEW
+const CORE_MODULES: ERPModule[] = [
+  ERPModule.PRODUCTS,
+  ERPModule.SALES,
+  ERPModule.PURCHASE,
+  ERPModule.MANUFACTURING,
+  ERPModule.BOM,
+  ERPModule.AUDIT,
+];
+
 export const checkModuleAccess = (module: ERPModule, requiredAccess: AccessType = AccessType.VIEW) => {
   return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -29,6 +39,11 @@ export const checkModuleAccess = (module: ERPModule, requiredAccess: AccessType 
       });
 
       if (!access) {
+        // For core modules, allow VIEW access by default (all users can see data)
+        if (CORE_MODULES.includes(module) && requiredAccess === AccessType.VIEW) {
+          next();
+          return;
+        }
         res.status(403).json({
           errors: [{ field: 'access', message: `No access configured for module: ${module}` }],
         });
