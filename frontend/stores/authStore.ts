@@ -7,6 +7,7 @@ interface User {
   email: string;
   role: string;
   mobile?: string;
+  address?: string;
   is_active: boolean;
   module_access: { module: string; access_type: string }[];
 }
