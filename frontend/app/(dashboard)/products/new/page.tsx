@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { productsApi, apiClient } from '@/lib/api/client';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileText } from 'lucide-react';
+import Link from 'next/link';
 
 export default function NewProductPage() {
   const router = useRouter();
@@ -44,14 +45,19 @@ export default function NewProductPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-md transition-colors">
-          <ArrowLeft size={18} className="text-slate-600" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">New Product</h1>
-          <p className="text-sm text-slate-500">Add a new product to the inventory</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-md transition-colors">
+            <ArrowLeft size={18} className="text-slate-600" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">New Product</h1>
+            <p className="text-sm text-slate-500">Add a new product to the inventory</p>
+          </div>
         </div>
+        <Link href="/audit-logs?module=PRODUCTS" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-md hover:bg-slate-100 transition-colors">
+          <FileText size={14} /> Logs
+        </Link>
       </div>
 
       {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg"><p className="text-sm text-red-700">⚠ {error}</p></div>}
