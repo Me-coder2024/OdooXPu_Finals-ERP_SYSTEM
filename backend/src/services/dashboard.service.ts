@@ -4,8 +4,9 @@ import { Prisma } from '@prisma/client';
 export class DashboardService {
   /**
    * Dashboard stats — ALL from live DB aggregates, NEVER static JSON
+   * Now also returns "my" counts for the logged-in user
    */
-  static async getStats() {
+  static async getStats(userId?: string) {
     const [
       totalProducts,
       activeProducts,
@@ -93,6 +94,35 @@ export class DashboardService {
       }),
     ]);
 
+    // ─── "My" counts for the logged-in user ───
+    let mySoByStatus: Record<string, number> = {};
+    let myPoByStatus: Record<string, number> = {};
+    let myMoByStatus: Record<string, number> = {};
+
+    if (userId) {
+      const [mySoGrouped, myPoGrouped, myMoGrouped] = await Promise.all([
+        prisma.salesOrder.groupBy({
+          by: ['status'],
+          where: { created_by: userId },
+          _count: { id: true },
+        }),
+        prisma.purchaseOrder.groupBy({
+          by: ['status'],
+          where: { created_by: userId },
+          _count: { id: true },
+        }),
+        prisma.manufacturingOrder.groupBy({
+          by: ['status'],
+          where: { created_by: userId },
+          _count: { id: true },
+        }),
+      ]);
+
+      mySoByStatus = formatStatusCounts(mySoGrouped as unknown as StatusGroup[]);
+      myPoByStatus = formatStatusCounts(myPoGrouped as unknown as StatusGroup[]);
+      myMoByStatus = formatStatusCounts(myMoGrouped as unknown as StatusGroup[]);
+    }
+
     // FIX: Query low-stock products using raw SQL comparison (field vs field)
     // Prisma can't compare two columns directly, so we use $queryRaw
     let lowStockProducts: { id: string; name: string; sku: string; on_hand_qty: number; min_stock_qty: number; reserved_qty: number }[] = [];
@@ -111,15 +141,6 @@ export class DashboardService {
       lowStockProducts = allProducts.filter((p) => p.on_hand_qty <= p.min_stock_qty && p.min_stock_qty > 0);
     }
 
-    // Format status counts into objects
-    const formatStatusCounts = (grouped: { status: string; _count: { id: number } }[]) => {
-      const counts: Record<string, number> = {};
-      for (const g of grouped) {
-        counts[g.status] = g._count.id;
-      }
-      return counts;
-    };
-
     return {
       overview: {
         totalProducts,
@@ -130,15 +151,18 @@ export class DashboardService {
       },
       salesOrders: {
         total: totalSalesOrders,
-        byStatus: formatStatusCounts(soByStatus as unknown as { status: string; _count: { id: number } }[]),
+        byStatus: formatStatusCounts(soByStatus as unknown as StatusGroup[]),
+        myByStatus: mySoByStatus,
       },
       purchaseOrders: {
         total: totalPurchaseOrders,
-        byStatus: formatStatusCounts(poByStatus as unknown as { status: string; _count: { id: number } }[]),
+        byStatus: formatStatusCounts(poByStatus as unknown as StatusGroup[]),
+        myByStatus: myPoByStatus,
       },
       manufacturingOrders: {
         total: totalManufacturingOrders,
-        byStatus: formatStatusCounts(moByStatus as unknown as { status: string; _count: { id: number } }[]),
+        byStatus: formatStatusCounts(moByStatus as unknown as StatusGroup[]),
+        myByStatus: myMoByStatus,
       },
       alerts: {
         lowStockProducts: lowStockProducts.map((p) => ({
@@ -153,4 +177,15 @@ export class DashboardService {
       },
     };
   }
+}
+
+// ─── Helper types & functions ───
+type StatusGroup = { status: string; _count: { id: number } };
+
+function formatStatusCounts(grouped: StatusGroup[]) {
+  const counts: Record<string, number> = {};
+  for (const g of grouped) {
+    counts[g.status] = g._count.id;
+  }
+  return counts;
 }
