@@ -71,6 +71,9 @@ export class ManufacturingOrderService {
           },
           orderBy: { operation: { sequence_order: 'asc' } },
         },
+        triggered_pos: {
+          select: { id: true, po_number: true, status: true, auto_generated: true },
+        },
       },
     });
 
@@ -195,6 +198,7 @@ export class ManufacturingOrderService {
 
   /**
    * MO CONFIRM — read BoM → create mo_components → reserve components → create work_orders
+   * CASCADING PROCUREMENT: if a BOM component is short + procure_on_demand → auto PO/MO
    */
   static async confirm(id: string, performedBy: string, ipAddress?: string) {
     const order = await prisma.manufacturingOrder.findUnique({
@@ -223,6 +227,9 @@ export class ManufacturingOrderService {
       const bomQtyProduced = Number(order.bom.qty_produced);
       const multiplier = qtyToProduce / bomQtyProduced;
 
+      const autoCreatedPOs: string[] = [];
+      const autoCreatedMOs: string[] = [];
+
       // Create MO components from BoM components
       for (const bomComp of order.bom.components) {
         const requiredQty = Number(bomComp.quantity) * multiplier;
@@ -245,8 +252,8 @@ export class ManufacturingOrderService {
           },
         });
 
-        // Reserve components if available
         if (isAvailable) {
+          // ── SUFFICIENT STOCK — reserve fully ──
           const newReserved = reserved + requiredQty;
           await tx.product.update({
             where: { id: product.id },
@@ -264,6 +271,143 @@ export class ManufacturingOrderService {
             performedBy,
             tx,
           });
+        } else {
+          // ── SHORTAGE — reserve what's available, then auto-procure ──
+          const availableToReserve = Math.max(0, freeToUse);
+
+          if (availableToReserve > 0) {
+            const newReserved = reserved + availableToReserve;
+            await tx.product.update({
+              where: { id: product.id },
+              data: { reserved_qty: new Prisma.Decimal(newReserved) },
+            });
+
+            await writeStockLedgerEntry({
+              productId: product.id,
+              movementType: StockMovement.RESERVATION,
+              qtyChange: availableToReserve,
+              balanceAfter: onHand,
+              referenceType: 'ManufacturingOrder',
+              referenceId: id,
+              notes: `Partially reserved ${availableToReserve} of ${requiredQty} units for ${order.mo_number}`,
+              performedBy,
+              tx,
+            });
+          }
+
+          const shortageQty = requiredQty - availableToReserve;
+
+          // ═══ CASCADING PROCUREMENT — auto-create PO or nested MO ═══
+          if (product.procure_on_demand && shortageQty > 0) {
+            if (product.procurement_type === 'PURCHASE') {
+              // Auto-create Purchase Order for raw material shortage
+              const lastPO = await tx.purchaseOrder.findFirst({
+                orderBy: { created_at: 'desc' },
+                select: { po_number: true },
+              });
+              const nextPONum = lastPO
+                ? parseInt(lastPO.po_number.replace('PO-', '')) + 1
+                : 1;
+              const poNumber = `PO-${String(nextPONum).padStart(4, '0')}`;
+
+              if (!product.preferred_vendor_id) {
+                throw new Error(
+                  `Component ${product.name} (${product.sku}) requires a preferred vendor for auto purchase.`
+                );
+              }
+
+              const po = await tx.purchaseOrder.create({
+                data: {
+                  po_number: poNumber,
+                  vendor_id: product.preferred_vendor_id,
+                  order_date: new Date(),
+                  auto_generated: true,
+                  source_mo_id: id,
+                  created_by: performedBy,
+                  total_amount: new Prisma.Decimal(shortageQty * Number(product.cost_price)),
+                  notes: `Auto-generated from ${order.mo_number} for component shortage of ${shortageQty} ${product.name}`,
+                  lines: {
+                    create: [{
+                      product_id: product.id,
+                      ordered_qty: new Prisma.Decimal(shortageQty),
+                      received_qty: new Prisma.Decimal(0),
+                      unit_cost: product.cost_price,
+                      subtotal: new Prisma.Decimal(shortageQty * Number(product.cost_price)),
+                    }],
+                  },
+                },
+              });
+
+              autoCreatedPOs.push(poNumber);
+
+              await writeAuditLog({
+                userId: performedBy,
+                module: 'PURCHASE',
+                action: 'AUTO_CREATE',
+                entity: 'PurchaseOrder',
+                entityId: po.id,
+                oldValue: null,
+                newValue: {
+                  po_number: poNumber,
+                  auto_generated: true,
+                  source_mo: order.mo_number,
+                  shortage_qty: shortageQty,
+                  product: product.name,
+                },
+                ipAddress,
+                tx,
+              });
+            } else if (product.procurement_type === 'MANUFACTURING') {
+              // Auto-create nested Manufacturing Order (if component has a BoM)
+              if (!product.bom_id) {
+                throw new Error(
+                  `Component ${product.name} (${product.sku}) requires a BoM for auto manufacturing.`
+                );
+              }
+
+              const lastMO = await tx.manufacturingOrder.findFirst({
+                orderBy: { created_at: 'desc' },
+                select: { mo_number: true },
+              });
+              const nextMONum = lastMO
+                ? parseInt(lastMO.mo_number.replace('MO-', '')) + 1
+                : 1;
+              const moNumber = `MO-${String(nextMONum).padStart(4, '0')}`;
+
+              const nestedMO = await tx.manufacturingOrder.create({
+                data: {
+                  mo_number: moNumber,
+                  product_id: product.id,
+                  bom_id: product.bom_id,
+                  qty_to_produce: new Prisma.Decimal(shortageQty),
+                  scheduled_date: new Date(),
+                  auto_generated: true,
+                  created_by: performedBy,
+                  notes: `Auto-generated from ${order.mo_number} for component shortage of ${shortageQty} ${product.name}`,
+                },
+              });
+
+              autoCreatedMOs.push(moNumber);
+
+              await writeAuditLog({
+                userId: performedBy,
+                module: 'MANUFACTURING',
+                action: 'AUTO_CREATE',
+                entity: 'ManufacturingOrder',
+                entityId: nestedMO.id,
+                oldValue: null,
+                newValue: {
+                  mo_number: moNumber,
+                  auto_generated: true,
+                  source_mo: order.mo_number,
+                  shortage_qty: shortageQty,
+                  product: product.name,
+                },
+                ipAddress,
+                tx,
+              });
+            }
+          }
         }
       }
 
@@ -297,6 +441,9 @@ export class ManufacturingOrderService {
             },
             orderBy: { operation: { sequence_order: 'asc' } },
           },
+          triggered_pos: {
+            select: { id: true, po_number: true, status: true, auto_generated: true },
+          },
         },
       });
 
@@ -311,12 +458,18 @@ export class ManufacturingOrderService {
           status: 'CONFIRMED',
           components_created: order.bom.components.length,
           work_orders_created: order.bom.operations.length,
+          auto_created_pos: autoCreatedPOs,
+          auto_created_mos: autoCreatedMOs,
         },
         ipAddress,
         tx,
       });
 
-      return updatedOrder;
+      return {
+        order: updatedOrder,
+        autoCreatedPOs,
+        autoCreatedMOs,
+      };
     });
 
     return result;
