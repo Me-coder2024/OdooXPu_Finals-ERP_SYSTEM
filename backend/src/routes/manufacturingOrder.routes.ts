@@ -65,8 +65,13 @@ router.patch('/:id', checkModuleAccess(ERPModule.MANUFACTURING, AccessType.FULL)
 
 router.post('/:id/confirm', checkModuleAccess(ERPModule.MANUFACTURING, AccessType.FULL), [param('id').isUUID()], validate, async (req: AuthRequest, res: Response) => {
   try {
-    const order = await ManufacturingOrderService.confirm(req.params.id, req.user!.id, req.ip);
-    res.json({ success: true, data: order });
+    const result = await ManufacturingOrderService.confirm(req.params.id, req.user!.id, req.ip);
+    res.json({
+      success: true,
+      data: result.order,
+      autoCreatedPOs: result.autoCreatedPOs,
+      autoCreatedMOs: result.autoCreatedMOs,
+    });
   } catch (error: unknown) {
     const err = error as { status?: number; message?: string };
     res.status(err.status || 500).json({ errors: [{ field: 'server', message: err.message || 'Failed to confirm manufacturing order' }] });
