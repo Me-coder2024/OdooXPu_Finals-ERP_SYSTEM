@@ -2,6 +2,7 @@ import { Prisma, OrderStatus, StockMovement } from '@prisma/client';
 import prisma from '../config/database';
 import { writeAuditLog } from '../utils/auditLogger';
 import { writeStockLedgerEntry } from '../utils/stockLedgerHelper';
+import { ManufacturingOrderService } from './manufacturingOrder.service';
 
 export class SalesOrderService {
   static async getAll(page = 1, limit = 20, status?: OrderStatus) {
@@ -448,7 +449,6 @@ export class SalesOrderService {
                   auto_generated: true,
                   source_so_id: order.id,
                   created_by: performedBy,
-                  notes: `Auto-generated from ${order.so_number} for shortage of ${shortageQty} units`,
                 },
               });
 
@@ -471,6 +471,14 @@ export class SalesOrderService {
                 ipAddress,
                 tx,
               });
+
+              // ═══ AUTO-CONFIRM the MO (cascades: creates components, work orders, POs for raw materials) ═══
+              const moConfirmResult = await ManufacturingOrderService._confirmInTx(
+                tx, mo.id, performedBy, ipAddress
+              );
+              // Merge cascaded POs/MOs into the response
+              autoCreatedPOs.push(...moConfirmResult.autoCreatedPOs);
+              autoCreatedMOs.push(...moConfirmResult.autoCreatedMOs);
             }
           }
 

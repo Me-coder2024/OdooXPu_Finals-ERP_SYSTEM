@@ -211,17 +211,15 @@ export default function UserDashboard() {
               <div className="flex gap-1 mb-4 relative z-10">
                 <button
                   onClick={() => card.setTab('all')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    activeTab === 'all' ? 'bg-white/20 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'
-                  }`}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${activeTab === 'all' ? 'bg-white/20 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'
+                    }`}
                 >
                   All
                 </button>
                 <button
                   onClick={() => card.setTab('my')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    activeTab === 'my' ? 'bg-white/20 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'
-                  }`}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${activeTab === 'my' ? 'bg-white/20 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'
+                    }`}
                 >
                   My
                 </button>
@@ -265,9 +263,8 @@ export default function UserDashboard() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="text-sm font-semibold text-slate-900 tabular-nums">{formatCurrency(so.total_amount)}</span>
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                        so.status === 'DRAFT' ? 'bg-slate-100 text-slate-600' : so.status === 'CONFIRMED' ? 'bg-blue-50 text-blue-700' : so.status === 'FULLY_DELIVERED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                      }`}>{so.status.replace(/_/g, ' ')}</span>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${so.status === 'DRAFT' ? 'bg-slate-100 text-slate-600' : so.status === 'CONFIRMED' ? 'bg-blue-50 text-blue-700' : so.status === 'FULLY_DELIVERED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                        }`}>{so.status.replace(/_/g, ' ')}</span>
                     </div>
                   </Link>
                 ))}

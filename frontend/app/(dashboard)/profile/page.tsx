@@ -28,7 +28,7 @@ export default function ProfilePage() {
       const response = await apiClient.get(`/users/${userId}/photo`, {
         responseType: 'blob',
       });
-      const blob = new Blob([response.data], { type: response.headers['content-type'] });
+      const blob = new Blob([response.data], { type: response.headers['content-type'] as string });
       const url = URL.createObjectURL(blob);
       setPhotoUrl(url);
     } catch {
